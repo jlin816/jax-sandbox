@@ -13,7 +13,7 @@ from flax.training import train_state
 from flax.training.common_utils import onehot
 import jax.numpy as jnp
 
-# Extend train state by with dropout rng in state
+# Extend train state by keeping dropout rng in state
 class TrainState(train_state.TrainState):
     dropout_rng: jnp.ndarray
 
@@ -25,7 +25,6 @@ def main(
     batch_size: int = 16,
     max_length: int = 256,
 ):  
-    # TODO: make it use GPU
     seed_val = 0
     random.seed(seed_val)
     np.random.seed(seed_val)
@@ -112,8 +111,8 @@ def main(
         return loss.mean()
 
     # Functional style: define how to update state in a single step.
-    # TODO: jit this
     # TODO: add types (what's torch / jnp.ndarray)
+    @jax.jit
     def train_step(state, batch):
         # Note: you need to split the dropout rng for each step, otherwise we'll drop out the same units every time!
         dropout_rng, new_dropout_rng = jax.random.split(state.dropout_rng)
@@ -139,7 +138,7 @@ def main(
     for i, batch in enumerate(train_dataloader):
         train_state, loss = train_step(train_state, batch)
         if i % 100 == 0:
-            print(f"Step {i} loss: {loss}")
+            print(f"step {i} | elapsed {(time.time() - start) / 60:.2f}m | loss: {loss.item():.2f}")# | val: {val_loss:.2f}")
 
 #        if i % 100 == 0:
 #            model.eval()
@@ -158,7 +157,6 @@ def main(
 #                print("Early stopping.")
 #                break
             
-            print(f"step {i} | elapsed {(time.time() - start) / 60:.2f}m | loss: {loss.item():.2f}")# | val: {val_loss:.2f}")
     print("Done.")
 
 if __name__ == "__main__":

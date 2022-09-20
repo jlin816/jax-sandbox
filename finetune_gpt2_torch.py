@@ -1,4 +1,4 @@
-from transformers import AutoModelForCausalLM, GPT2TokenizerFast, AdamW
+from transformers import AutoModelForCausalLM, GPT2TokenizerFast
 from datasets import load_dataset
 import dcargs
 import random
@@ -8,12 +8,10 @@ from torch.utils.data import DataLoader
 import time
 
 def main(
-    batch_size: int = 8,
+    batch_size: int = 16,
     max_length: int = 256,
 ):
-    # Set the seed value all over the place to make this reproducible.
     seed_val = 0
-
     random.seed(seed_val)
     np.random.seed(seed_val)
     torch.manual_seed(seed_val)
@@ -68,7 +66,7 @@ def main(
     )
 
     # Default params from HF TrainingArguments
-    optimizer = AdamW(
+    optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=1e-4,
     )
@@ -110,6 +108,7 @@ def main(
                 break
             
             print(f"step {i} | elapsed {(time.time() - start) / 60:.2f}m | loss: {loss.item():.2f} | val: {val_loss:.2f}")
+    print("Done.")
 
 if __name__ == "__main__":
     dcargs.cli(main)

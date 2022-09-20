@@ -1,3 +1,4 @@
+from typing import List, Dict
 from transformers import FlaxAutoModelForCausalLM, GPT2TokenizerFast
 from datasets import load_dataset
 import dcargs
@@ -68,17 +69,24 @@ def main(
     )
 
     # Setup dataloaders.
-    dataset.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
+    # Setting format only changes the __getitem__ return type, we also have to
+    #  set the collate function that merges samples into a minibatch.
+    dataset.set_format(type="numpy", columns=["input_ids", "attention_mask", "labels"])
+    def numpy_collate_fn(samples: List[Dict[str, np.ndarray]]) -> np.ndarray:
+        return {k: np.stack([s[k] for s in samples]) for k in samples[0].keys()}
+        
     train_dataloader = DataLoader(
         dataset["train"],
         batch_size=batch_size,
         shuffle=True,
+        collate_fn=numpy_collate_fn,
     )
 
     val_dataloader = DataLoader(
         dataset["validation"],
         batch_size=batch_size,
         shuffle=False,
+        collate_fn=numpy_collate_fn,
     )
 
     # Initiaize optimizer.
@@ -96,10 +104,10 @@ def main(
     )
     
     # This could also be calculated within the HF forward pass (with a `labels` arg) but they don't implement it
-    def loss_fn(logits, labels):
+    # TODO: labels is currently actually a np.ndarray, not a jnp.ndarray
+    def loss_fn(logits: jnp.ndarray, labels: jnp.ndarray):
         shift_logits = logits[..., :-1, :]
         shift_labels = labels[..., 1:]
-        import pdb; pdb.set_trace()
         loss = optax.softmax_cross_entropy(shift_logits, onehot(shift_labels, shift_logits.shape[-1]))
         return loss.mean()
 
@@ -108,7 +116,6 @@ def main(
     # TODO: add types (what's torch / jnp.ndarray)
     def train_step(state, batch):
         # Note: you need to split the dropout rng for each step, otherwise we'll drop out the same units every time!
-        # TODO: is this the right way to pass in dropout_rng, as an arg to train_step?
         dropout_rng, new_dropout_rng = jax.random.split(state.dropout_rng)
         # Define a function that goes params -> loss that we'll differentiate.
         def compute_loss(params):
@@ -130,10 +137,6 @@ def main(
     best_val = 100
     start = time.time()
     for i, batch in enumerate(train_dataloader):
-        input_ids = batch["input_ids"].to("cuda")
-        labels = batch["labels"].to("cuda")
-        attention_mask = batch["attention_mask"].to("cuda")
-
         train_state, loss = train_step(train_state, batch)
         if i % 100 == 0:
             print(f"Step {i} loss: {loss}")
@@ -155,7 +158,7 @@ def main(
 #                print("Early stopping.")
 #                break
             
-            print(f"step {i} | elapsed {(time.time() - start) / 60:.2f}m | loss: {loss.item():.2f} | val: {val_loss:.2f}")
+            print(f"step {i} | elapsed {(time.time() - start) / 60:.2f}m | loss: {loss.item():.2f}")# | val: {val_loss:.2f}")
     print("Done.")
 
 if __name__ == "__main__":

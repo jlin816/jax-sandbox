@@ -121,7 +121,7 @@ def main(
             # Remove labels since HF Flax model doesn't use them.
             labels = batch.pop("labels")
             # Call the model with the `apply_fn` kept by TrainState.
-            outputs = train_state.apply_fn(**batch, train=True, dropout_rng=dropout_rng)
+            outputs = state.apply_fn(**batch, params=params, train=True, dropout_rng=dropout_rng)
             return loss_fn(outputs.logits, labels)
 
         grad_fn = jax.value_and_grad(compute_loss)
@@ -129,7 +129,12 @@ def main(
         state = state.apply_gradients(grads=grads)
         return state, loss
 
-    # TODO: write eval loop
+    @jax.jit
+    def eval_step(state, batch):
+        labels = batch.pop("labels")
+        outputs = state.apply_fn(**batch, params=state.params, train=False)
+        loss = loss_fn(outputs.logits, labels)
+        return loss
 
     # Train loop.
     total_loss = 0
@@ -138,24 +143,17 @@ def main(
     for i, batch in enumerate(train_dataloader):
         train_state, loss = train_step(train_state, batch)
         if i % 100 == 0:
-            print(f"step {i} | elapsed {(time.time() - start) / 60:.2f}m | loss: {loss.item():.2f}")# | val: {val_loss:.2f}")
-
-#        if i % 100 == 0:
-#            model.eval()
-#            val_loss = 0
-#            with torch.no_grad():
-#                for batch in val_dataloader:
-#                    input_ids = batch["input_ids"].to("cuda")
-#                    labels = batch["labels"].to("cuda")
-#                    attention_mask = batch["attention_mask"].to("cuda")
-#                    outputs = model(input_ids, attention_mask=attention_mask)
-#                    val_loss += outputs.loss.item()
-#            val_loss /= len(val_dataloader)
-#            if val_loss < best_val:
-#                best_val = val_loss
-#            if best_val < .25 * val_loss:
-#                print("Early stopping.")
-#                break
+            val_loss = 0
+            for batch in val_dataloader:
+                # TODO: should I be accumulating the loss here?
+                val_loss += eval_step(train_state, batch).item()
+            val_loss /= len(val_dataloader)
+            if val_loss < best_val:
+                best_val = val_loss
+            if best_val < .25 * val_loss:
+                print("Early stopping.")
+                break
+            print(f"step {i} | elapsed {(time.time() - start) / 60:.2f}m | loss: {loss.item():.2f} | val: {val_loss:.2f}")
             
     print("Done.")
 

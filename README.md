@@ -22,10 +22,10 @@ step 500 | elapsed 9.52m | loss: 3.92
 ## Jax, GPU, jit train step:
 (Note first step is slower than torch because of jit!) 
 ```
-step 0 | elapsed 0.38m | loss: 4.01
-step 100 | elapsed 0.56m | loss: 3.87
-step 200 | elapsed 0.75m | loss: 3.88
-step 300 | elapsed 0.94m | loss: 3.98
-step 400 | elapsed 1.12m | loss: 3.91
-step 500 | elapsed 1.31m | loss: 3.92
+step 0 | elapsed 0.49m | loss: 4.01 | val: 3.52
+step 100 | elapsed 1.11m | loss: 3.07 | val: 2.96
+step 200 | elapsed 1.72m | loss: 3.08 | val: 2.92
+step 300 | elapsed 2.34m | loss: 3.16 | val: 2.89
+step 400 | elapsed 2.97m | loss: 3.07 | val: 2.88
+step 500 | elapsed 3.59m | loss: 3.01 | val: 2.87
 ```
